@@ -1,25 +1,31 @@
 version: 0.2
 
+env:
+  variables:
+    REPOSITORY_URI: 176087999103.dkr.ecr.us-east-1.amazonaws.com/portfolio
+    IMAGE_TAG: $CODEBUILD_RESOLVED_SOURCE_VERSION
+
 phases:
   pre_build:
     commands:
       - echo "Logging in to Amazon ECR..."
       - aws --version
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 176087999103.dkr.ecr.us-east-1.amazonaws.com
-      - REPOSITORY_URI=176087999103.dkr.ecr.us-east-1.amazonaws.com/portfolio
-      - IMAGE_TAG=${CODEBUILD_RESOLVED_SOURCE_VERSION}
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REPOSITORY_URI
+      - echo "Pulling base image to warm cache..."
+      - docker pull public.ecr.aws/nginx/nginx:alpine || true
 
   build:
     commands:
       - echo "Building Docker image..."
+      # Build using the public ECR image
       - docker build -t portfolio .
-      # Tag with both latest and IMAGE_TAG
+      # Tag for ECR with commit hash and latest
       - docker tag portfolio:latest $REPOSITORY_URI:$IMAGE_TAG
       - docker tag portfolio:latest $REPOSITORY_URI:latest
 
   post_build:
     commands:
-      - echo "Pushing Docker image..."
+      - echo "Pushing Docker image to ECR..."
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker push $REPOSITORY_URI:latest
       - echo "Creating imagedefinitions.json for ECS deployment..."
@@ -29,3 +35,4 @@ phases:
 artifacts:
   files:
     - imagedefinitions.json
+
